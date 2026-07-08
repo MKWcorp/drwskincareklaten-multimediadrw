@@ -29,6 +29,19 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'storage.googleapis.com',
       },
+      // Public catalog API image hosts (assets.drwskincare.com, *.drwapp.com)
+      {
+        protocol: 'https',
+        hostname: 'drwskincare.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.drwskincare.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.drwapp.com',
+      },
     ],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',

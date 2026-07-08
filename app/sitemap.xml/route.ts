@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { fetchAllPublic } from '@/lib/publicApi';
 
-// Force dynamic rendering for sitemap
-export const dynamic = 'force-dynamic'
+// Revalidate daily; product slugs come from the public catalog API.
+export const revalidate = 86400
 
 import { SITE_CONFIG } from '../../lib/site-config';
 
@@ -17,18 +17,15 @@ export async function GET() {
     '/privacy-policy',
   ];
 
-  // Get product slugs dynamically from database
+  // Get product slugs dynamically from the public catalog API
   const productSlugs: string[] = [];
   try {
-    const products = await (prisma as any).produk.findMany({
-      select: {
-        slug: true
-      }
-    });
-    
-    products.forEach((product: { slug: string | null }) => {
-      if (product.slug && product.slug.trim() !== '') {
-        productSlugs.push(`/product/${product.slug}`);
+    const items = await fetchAllPublic({ type: 'all' });
+
+    items.forEach((item) => {
+      const slug = item.slug || `${item.type}-${item.id}`;
+      if (slug && slug.trim() !== '') {
+        productSlugs.push(`/product/${slug}`);
       }
     });
   } catch (error) {

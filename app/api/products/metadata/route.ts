@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { getStoreItemBySlug } from '@/lib/publicApi';
 import { SITE_CONFIG, getPageUrl } from '../../../../lib/site-config';
 
-const prisma = new PrismaClient();
+// SEO metadata for a single product/paket, sourced from the public catalog API.
+// Varies by slug query param; upstream fetch is cached ~5 min in lib/publicApi.ts.
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,55 +12,46 @@ export async function GET(request: NextRequest) {
     const slug = searchParams.get('slug');
 
     if (!slug) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Slug is required' 
+      return NextResponse.json({
+        success: false,
+        error: 'Slug is required'
       }, { status: 400 });
     }
 
-    const product = await prisma.produk.findFirst({
-      where: {
-        slug: slug
-      },
-      include: {
-        produk_kategori: {
-          include: {
-            kategori: true
-          }
-        },
-        produk_detail: true
-      }
-    });
+    const product = await getStoreItemBySlug(slug);
 
     if (!product) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Product not found' 
+      return NextResponse.json({
+        success: false,
+        error: 'Product not found'
       }, { status: 404 });
     }
 
     // Generate metadata for the product
-    const productImage = product.foto_utama || '/logo_drwskincare_square.png';
-    const productPrice = product.harga_umum 
+    const productImage =
+      product.gambar || product.fotoProduk?.[0]?.url || '/logo_drwskincare_square.png';
+    const productPrice = product.hargaUmum
       ? new Intl.NumberFormat('id-ID', {
           style: 'currency',
           currency: 'IDR',
           minimumFractionDigits: 0,
-        }).format(Number(product.harga_umum))
+        }).format(Number(product.hargaUmum))
       : 'Hubungi Kami';
 
-    const title = `${product.nama_produk} - ${productPrice} | ${SITE_CONFIG.business.name}`;    const description = product.deskripsi_singkat 
-      ? `${product.deskripsi_singkat} - Produk skincare berkualitas dari ${SITE_CONFIG.business.name} dengan harga ${productPrice}. ${product.bpom ? `BPOM: ${product.bpom}` : ''}`
-      : `${product.nama_produk} - Produk skincare berkualitas dari ${SITE_CONFIG.business.name} dengan harga ${productPrice}. Konsultasi gratis dengan dokter berpengalaman.`;
+    const title = `${product.namaProduk} - ${productPrice} | ${SITE_CONFIG.business.name}`;
+    const description = product.deskripsi
+      ? `${product.deskripsi} - Produk skincare berkualitas dari ${SITE_CONFIG.business.name} dengan harga ${productPrice}. ${product.bpom ? `BPOM: ${product.bpom}` : ''}`
+      : `${product.namaProduk} - Produk skincare berkualitas dari ${SITE_CONFIG.business.name} dengan harga ${productPrice}. Konsultasi gratis dengan dokter berpengalaman.`;
 
     const metadata = {
       title,
       description,
-      image: productImage,      url: getPageUrl(`/product/${slug}`),
-      keywords: `${product.nama_produk}, skincare, ${SITE_CONFIG.business.name}, produk kecantikan, perawatan kulit, ${product.bpom ? `BPOM ${product.bpom}` : ''}`,
+      image: productImage,
+      url: getPageUrl(`/product/${slug}`),
+      keywords: `${product.namaProduk}, skincare, ${SITE_CONFIG.business.name}, produk kecantikan, perawatan kulit, ${product.bpom ? `BPOM ${product.bpom}` : ''}`,
       price: productPrice,
       bpom: product.bpom,
-      category: product.produk_kategori?.[0]?.kategori?.nama_kategori || 'Skincare'
+      category: product.categories?.name || 'Skincare'
     };
 
     return NextResponse.json({
@@ -71,13 +64,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error fetching product metadata:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Internal server error' 
+    return NextResponse.json({
+      success: false,
+      error: 'Internal server error'
     }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 }
-
-export const dynamic = 'force-dynamic';

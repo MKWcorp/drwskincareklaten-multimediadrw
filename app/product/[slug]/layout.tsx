@@ -1,38 +1,13 @@
 import { Metadata } from 'next'
 import { SITE_CONFIG, getPageUrl, getCanonicalUrl } from '../../../lib/site-config'
+import { getStoreItemBySlug, getStoreItems, type StoreProduct } from '@/lib/publicApi'
 
-interface Product {
-  id: string;
-  namaProduk: string;
-  deskripsi: string | null;
-  hargaUmum: number | null;
-  gambar: string | null;
-  fotoProduk: string | null;
-  slug: string;
-  bpom: string | null;
-}
+// Revalidate metadata/static params on the ~5 min public API window.
+export const revalidate = 300
 
-async function fetchProduct(slug: string): Promise<Product | null> {
-  try {    // Use production URL for build time, localhost for development
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? SITE_CONFIG.website.baseUrl 
-      : 'http://localhost:3000';
-      
-    const response = await fetch(`${baseUrl}/api/products?slug=${slug}`, {
-      next: { revalidate: 3600 } // Cache for 1 hour
-    });
-    
-    if (!response.ok) {
-      return null;
-    }
-    
-    const result = await response.json();
-    
-    if (result.success && result.data.length > 0) {
-      return result.data[0];
-    }
-    
-    return null;
+async function fetchProduct(slug: string): Promise<StoreProduct | null> {
+  try {
+    return await getStoreItemBySlug(slug)
   } catch (error) {
     console.error('Error fetching product for metadata:', error);
     return null;
@@ -51,7 +26,7 @@ export async function generateMetadata({
       description: `Produk yang Anda cari tidak ditemukan di ${SITE_CONFIG.business.name}.`,
     };
   }
-  const productImageRelative = product.gambar || product.fotoProduk || SITE_CONFIG.images.logoSquare;
+  const productImageRelative = product.gambar || product.fotoProduk?.[0]?.url || SITE_CONFIG.images.logoSquare;
   // Ensure absolute URL for Open Graph
   const productImage = productImageRelative.startsWith('http') 
     ? productImageRelative 
@@ -100,27 +75,9 @@ export async function generateMetadata({
 
 // Generate static params for better performance
 export async function generateStaticParams() {
-  try {    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? SITE_CONFIG.website.baseUrl 
-      : 'http://localhost:3000';
-      
-    const response = await fetch(`${baseUrl}/api/products`, {
-      next: { revalidate: 3600 }
-    });
-    
-    if (!response.ok) {
-      return [];
-    }
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      return result.data.map((product: Product) => ({
-        slug: product.slug,
-      }));
-    }
-    
-    return [];
+  try {
+    const items = await getStoreItems({ type: 'all' })
+    return items.map((product) => ({ slug: product.slug }))
   } catch (error) {
     console.error('Error generating static params:', error);
     return [];
